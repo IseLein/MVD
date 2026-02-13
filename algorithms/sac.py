@@ -21,6 +21,7 @@ class SAC(object):
         self.decoder_update_freq = cfg.decoder_update_freq
         self.mvd_update_freq = cfg.mvd_update_freq
         self.multi_view_disentanglement = cfg.multi_view_disentanglement
+        self.mvd_shared_only = cfg.mvd_shared_only
         self.num_cameras = len(cfg.cameras)
 
         self.actor = models.Actor(obs_shape, action_shape, cfg, priorioceptive_state_shape).to(self.device)
@@ -30,7 +31,9 @@ class SAC(object):
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         if self.multi_view_disentanglement:
-            all_enc_params = list(self.critic.shared_encoder.parameters()) + list(self.critic.private_encoder.parameters())
+            all_enc_params = list(self.critic.shared_encoder.parameters())
+            if not self.mvd_shared_only:
+                all_enc_params += list(self.critic.private_encoder.parameters())
             self.mvd_optimizer = torch.optim.Adam(
                 all_enc_params, lr=cfg.mvd_lr, betas=(cfg.mvd_beta, 0.999)
             )
@@ -41,8 +44,9 @@ class SAC(object):
         if self.multi_view_disentanglement:
             self.actor.shared_encoder.copy_conv_weights_from(self.critic.shared_encoder)
             self.actor.shared_encoder.copy_head_weights_from(self.critic.shared_encoder)
-            self.actor.private_encoder.copy_conv_weights_from(self.critic.private_encoder)
-            self.actor.private_encoder.copy_head_weights_from(self.critic.private_encoder)
+            if not self.mvd_shared_only:
+                self.actor.private_encoder.copy_conv_weights_from(self.critic.private_encoder)
+                self.actor.private_encoder.copy_head_weights_from(self.critic.private_encoder)
         else:
             self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
 
@@ -158,8 +162,9 @@ class SAC(object):
             if self.multi_view_disentanglement:
                 utils.soft_update_params(self.critic.shared_encoder, self.critic_target.shared_encoder,
                                          self.encoder_tau)
-                utils.soft_update_params(self.critic.private_encoder, self.critic_target.private_encoder,
-                                         self.encoder_tau)
+                if not self.mvd_shared_only:
+                    utils.soft_update_params(self.critic.private_encoder, self.critic_target.private_encoder,
+                                             self.encoder_tau)
             else:
                 utils.soft_update_params(self.critic.encoder, self.critic_target.encoder, self.encoder_tau)
 

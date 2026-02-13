@@ -63,7 +63,8 @@ class DrQ(SAC):
 			utils.soft_update_params(self.critic.Q2, self.critic_target.Q2, self.critic_tau)
 			if self.multi_view_disentanglement:
 				utils.soft_update_params(self.critic.shared_encoder, self.critic_target.shared_encoder, self.encoder_tau)
-				utils.soft_update_params(self.critic.private_encoder, self.critic_target.private_encoder, self.encoder_tau)
+				if not self.mvd_shared_only:
+					utils.soft_update_params(self.critic.private_encoder, self.critic_target.private_encoder, self.encoder_tau)
 			else:
 				utils.soft_update_params(self.critic.encoder, self.critic_target.encoder, self.encoder_tau)
 

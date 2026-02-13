@@ -13,6 +13,7 @@ def parse_args():
     # multi-view disentanglement
     parser.add_argument('--cameras', nargs='+', type=str)
     parser.add_argument('--multi_view_disentanglement', default="False", type=str)
+    parser.add_argument('--mvd_shared_only', default="False", type=str)
     parser.add_argument('--eval_on_each_camera', default="False", type=str)
 
     # train
@@ -81,8 +82,13 @@ def parse_args():
     assert args.log_dir is not None, 'must provide a log directory for experiment'
 
     args.multi_view_disentanglement = eval(args.multi_view_disentanglement)
+    args.mvd_shared_only = eval(args.mvd_shared_only)
     args.eval_on_each_camera = eval(args.eval_on_each_camera)
     args.use_proprioceptive_state = eval(args.use_proprioceptive_state)
     args.image_reconstruction_loss = eval(args.image_reconstruction_loss)
+
+    if args.mvd_shared_only:
+        assert args.multi_view_disentanglement, \
+            '--mvd_shared_only requires --multi_view_disentanglement=True'
 
     return args

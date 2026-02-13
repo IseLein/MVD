@@ -12,7 +12,10 @@ def update_decoder(agent, obs, target_obs, logger, step):
     if agent.multi_view_disentanglement:
         shared_idx = np.random.randint(agent.num_cameras)
         z_shared = z_shared[:, shared_idx].unsqueeze(1).repeat(1, agent.num_cameras, 1)
-        z = torch.concat((z_shared, z_private), dim=-1)
+        if agent.cfg.mvd_shared_only:
+            z = z_shared
+        else:
+            z = torch.concat((z_shared, z_private), dim=-1)
         z = z.reshape((batch_size*num_cameras, -1))
 
     target_obs = target_obs.reshape((batch_size*num_cameras, target_obs.shape[1] // num_cameras, *target_obs.shape[2:]))
@@ -38,28 +41,39 @@ def update_mvd(agent, obs, next_obs, logger, step):
     num_cameras = z.shape[1]
 
     with torch.no_grad():
-        z_target, z_target_shared, z_target_private = agent.critic_target.get_representation(obs)
-        next_z_target, next_z_target_shared, next_z_target_private = agent.critic_target.get_representation(next_obs)
-
-    shared_loss = InfoNCE(negative_mode="mixed")
-    private_loss = InfoNCE(negative_mode="paired")
+        _, z_target_shared, z_target_private = agent.critic_target.get_representation(obs)
+        _, _, next_z_target_private = agent.critic_target.get_representation(next_obs)
 
     pos_idx = np.random.randint(num_cameras)
     anchor_idxs = [i for i in range(num_cameras) if i != pos_idx]
+    if len(anchor_idxs) == 0:
+        return
+
     multi_view_loss = 0
 
-    for anchor_idx in anchor_idxs:
-        shared_query = z_shared[:, anchor_idx]
-        private_query = z_private[:, anchor_idx]
+    if agent.cfg.mvd_shared_only:
+        # Shared-only ablation: optimise only camera alignment in shared features.
+        shared_loss = InfoNCE()
+        for anchor_idx in anchor_idxs:
+            shared_query = z_shared[:, anchor_idx]
+            shared_positive_key = z_target_shared[:, pos_idx]
+            multi_view_loss += shared_loss(shared_query, shared_positive_key)
+    else:
+        shared_loss = InfoNCE(negative_mode="mixed")
+        private_loss = InfoNCE(negative_mode="paired")
 
-        shared_positive_key = z_target_shared[:, pos_idx]
-        private_positive_key = next_z_target_private[:, anchor_idx]
+        for anchor_idx in anchor_idxs:
+            shared_query = z_shared[:, anchor_idx]
+            private_query = z_private[:, anchor_idx]
 
-        shared_negative_key = z_target_private
-        private_negative_key = z_target_private[:, [pos_idx]]
+            shared_positive_key = z_target_shared[:, pos_idx]
+            private_positive_key = next_z_target_private[:, anchor_idx]
 
-        multi_view_loss += shared_loss(shared_query, shared_positive_key, shared_negative_key)
-        multi_view_loss += private_loss(private_query, private_positive_key, private_negative_key)
+            shared_negative_key = z_target_private
+            private_negative_key = z_target_private[:, [pos_idx]]
+
+            multi_view_loss += shared_loss(shared_query, shared_positive_key, shared_negative_key)
+            multi_view_loss += private_loss(private_query, private_positive_key, private_negative_key)
 
     multi_view_loss /= len(anchor_idxs)
 

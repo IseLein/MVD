@@ -94,7 +94,7 @@ class Decoder(nn.Module):
 
         self.num_layers = cfg.num_conv_layers
         self.num_filters = cfg.num_filters
-        if cfg.multi_view_disentanglement:
+        if cfg.multi_view_disentanglement and not cfg.mvd_shared_only:
             self.feature_dim = cfg.feature_dim * 2
         else:
             self.feature_dim = cfg.feature_dim
@@ -159,6 +159,7 @@ class Actor(nn.Module):
         self.algorithm = cfg.algorithm
         self.frame_stack = cfg.frame_stack
         self.multi_view_disentanglement = cfg.multi_view_disentanglement
+        self.mvd_shared_only = cfg.mvd_shared_only
         self.num_cameras = len(cfg.cameras)
         self.use_proprioceptive_state = cfg.use_proprioceptive_state
         self.encoder_output_dim = cfg.feature_dim
@@ -167,15 +168,19 @@ class Actor(nn.Module):
         obs_shape = (int(obs_shape[0] / self.num_cameras), *obs_shape[1:])
 
         if self.multi_view_disentanglement:
-            self.private_encoder = Encoder(obs_shape, cfg)
             self.shared_encoder = Encoder(obs_shape, cfg)
+            if not self.mvd_shared_only:
+                self.private_encoder = Encoder(obs_shape, cfg)
         else:
             self.encoder = Encoder(obs_shape, cfg)
 
         if self.multi_view_disentanglement:
             shared_feature_dim = self.shared_encoder.feature_dim
-            private_feature_dim = self.private_encoder.feature_dim
-            input_dim = shared_feature_dim + private_feature_dim
+            if self.mvd_shared_only:
+                input_dim = shared_feature_dim
+            else:
+                private_feature_dim = self.private_encoder.feature_dim
+                input_dim = shared_feature_dim + private_feature_dim
         else:
             input_dim = self.encoder.feature_dim
 
@@ -196,22 +201,27 @@ class Actor(nn.Module):
             num_cams = self.num_cameras
         obs = obs.view((N * num_cams, -1, *obs.shape[2:]))
         if self.multi_view_disentanglement:
-            z_private = self.private_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
             z_shared = self.shared_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
-            z = torch.cat((z_shared, z_private), dim=-1)
+            if self.mvd_shared_only:
+                z = z_shared
+            else:
+                z_private = self.private_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
+                z = torch.cat((z_shared, z_private), dim=-1)
         else:
             z = self.encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
 
         if self.multi_view_disentanglement:
-            z = z.view(N, num_cams, -1)
             z_shared = z_shared.view(N, num_cams, -1)
-            z_private = z_private.view(N, num_cams, -1)
-
             idx_shared = torch.randperm(num_cams)[0]
-            idx_private = torch.randperm(num_cams)[0]
             z_shared = z_shared[:, idx_shared]
-            z_private = z_private[:, idx_private]
-            z = torch.cat((z_shared, z_private), dim=-1)
+
+            if self.mvd_shared_only:
+                z = z_shared
+            else:
+                z_private = z_private.view(N, num_cams, -1)
+                idx_private = torch.randperm(num_cams)[0]
+                z_private = z_private[:, idx_private]
+                z = torch.cat((z_shared, z_private), dim=-1)
 
         if self.use_proprioceptive_state:
             z = torch.cat((z, proprioceptive_state), dim=-1)
@@ -245,6 +255,7 @@ class Critic(nn.Module):
 
         self.frame_stack = cfg.frame_stack
         self.multi_view_disentanglement = cfg.multi_view_disentanglement
+        self.mvd_shared_only = cfg.mvd_shared_only
         self.num_cameras = len(cfg.cameras)
         self.use_proprioceptive_state = cfg.use_proprioceptive_state
         self.device = cfg.device
@@ -252,15 +263,19 @@ class Critic(nn.Module):
         obs_shape = (int(obs_shape[0] / self.num_cameras), *obs_shape[1:])
 
         if cfg.multi_view_disentanglement:
-            self.private_encoder = Encoder(obs_shape, cfg)
             self.shared_encoder = Encoder(obs_shape, cfg)
+            if not self.mvd_shared_only:
+                self.private_encoder = Encoder(obs_shape, cfg)
         else:
             self.encoder = Encoder(obs_shape, cfg)
 
         if self.multi_view_disentanglement:
             shared_feature_dim = self.shared_encoder.feature_dim
-            private_feature_dim = self.private_encoder.feature_dim
-            input_dim = shared_feature_dim + private_feature_dim
+            if self.mvd_shared_only:
+                input_dim = shared_feature_dim
+            else:
+                private_feature_dim = self.private_encoder.feature_dim
+                input_dim = shared_feature_dim + private_feature_dim
         else:
             input_dim = self.encoder.feature_dim
         if self.use_proprioceptive_state:
@@ -281,18 +296,22 @@ class Critic(nn.Module):
         obs = obs.view((N * self.num_cameras, -1, *obs.shape[2:]))
         if self.multi_view_disentanglement:
             z_shared = self.shared_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
-            z_private = self.private_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
+            if not self.mvd_shared_only:
+                z_private = self.private_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
         else:
             z = self.encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
 
         if self.multi_view_disentanglement:
             z_shared = z_shared.view(N, self.num_cameras, -1)
-            z_private = z_private.view(N, self.num_cameras, -1)
             idx_shared = torch.randperm(self.num_cameras)[0]
-            idx_private = torch.randperm(self.num_cameras)[0]
             z_shared = z_shared[:, idx_shared]
-            z_private = z_private[:, idx_private]
-            z = torch.cat((z_shared, z_private), dim=-1)
+            if self.mvd_shared_only:
+                z = z_shared
+            else:
+                z_private = z_private.view(N, self.num_cameras, -1)
+                idx_private = torch.randperm(self.num_cameras)[0]
+                z_private = z_private[:, idx_private]
+                z = torch.cat((z_shared, z_private), dim=-1)
 
         assert z.size(0) == action.size(0)
 
@@ -314,16 +333,21 @@ class Critic(nn.Module):
         obs = obs.view((N * self.num_cameras, -1, *obs.shape[2:]))
         if self.multi_view_disentanglement:
             z_shared = self.shared_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
-            z_private = self.private_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
-            z = torch.cat((z_shared, z_private), dim=-1)
+            if self.mvd_shared_only:
+                z_private = None
+                z = z_shared
+            else:
+                z_private = self.private_encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
+                z = torch.cat((z_shared, z_private), dim=-1)
         else:
             z = self.encoder(obs, detach_encoder_conv=detach_encoder_conv, detach_encoder_head=detach_encoder_head)
             z_shared = None
             z_private = None
 
         if self.multi_view_disentanglement:
-            z_private = z_private.reshape(N, self.num_cameras, -1)
             z_shared = z_shared.reshape(N, self.num_cameras, -1)
+            if z_private is not None:
+                z_private = z_private.reshape(N, self.num_cameras, -1)
 
         z = z.reshape(N, self.num_cameras, -1)
 
@@ -332,7 +356,8 @@ class Critic(nn.Module):
     def log(self, logger, step):
         if self.multi_view_disentanglement:
             self.shared_encoder.log(logger, step)
-            self.private_encoder.log(logger, step)
+            if not self.mvd_shared_only:
+                self.private_encoder.log(logger, step)
         else:
             self.encoder.log(logger, step)
 
