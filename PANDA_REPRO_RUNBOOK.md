@@ -31,6 +31,12 @@ sudo apt-get install -y xvfb
 
 The script uses `xvfb-run` by default.
 
+Run preflight before long jobs:
+
+```bash
+bash scripts/preflight_remote.sh
+```
+
 ## 2. Branch Setup
 
 Make sure both branches exist locally:
