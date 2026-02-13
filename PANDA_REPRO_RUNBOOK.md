@@ -95,6 +95,16 @@ ABL_OUT_DIR=runs_ablation \
   - `run_meta/abl_shared_only_commit.txt`
 - Checks expected CSV files for every run.
 
+Live monitoring helper:
+
+```bash
+# watch latest main + ablation logs
+./scripts/watch_progress.sh
+
+# watch only main logs for seed 73
+./scripts/watch_progress.sh --phase main --seed 73
+```
+
 ## 6. Expected Output Locations
 
 Main reproduction CSVs:
