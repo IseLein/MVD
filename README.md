@@ -69,33 +69,17 @@ All generated images are under `images/`:
 - `images/ablation_front_mvd_vs_shared_only.png`
 - `images/ablation_side_mvd_vs_shared_only.png`
 
-### All Cameras: MVD vs Shared-Only
+### Main Reproduction: MVD vs Single-Camera (3 Views)
 
-![All cameras MVD vs SharedOnly](images/all_cameras_mvd_vs_shared_only.png)
+| First-Person | Third-Person Front | Third-Person Side |
+| --- | --- | --- |
+| ![First-person single vs MVD](images/camera_first_single_vs_mvd.png) | ![Third-front single vs MVD](images/camera_front_single_vs_mvd.png) | ![Third-side single vs MVD](images/camera_side_single_vs_mvd.png) |
 
-### First-Person: Single-Cam vs MVD
+### Ablation: MVD vs Shared-Only
 
-![First-person single vs MVD](images/camera_first_single_vs_mvd.png)
-
-### Third-Person Front: Single-Cam vs MVD
-
-![Third-front single vs MVD](images/camera_front_single_vs_mvd.png)
-
-### Third-Person Side: Single-Cam vs MVD
-
-![Third-side single vs MVD](images/camera_side_single_vs_mvd.png)
-
-### Ablation First-Person: MVD vs Shared-Only
-
-![Ablation first-person](images/ablation_first_mvd_vs_shared_only.png)
-
-### Ablation Third-Person Front: MVD vs Shared-Only
-
-![Ablation third-person front](images/ablation_front_mvd_vs_shared_only.png)
-
-### Ablation Third-Person Side: MVD vs Shared-Only
-
-![Ablation third-person side](images/ablation_side_mvd_vs_shared_only.png)
+| All cameras | First-Person | Third-Person Front | Third-Person Side |
+| --- | --- | --- | --- |
+| ![All cameras MVD vs SharedOnly](images/all_cameras_mvd_vs_shared_only.png) | ![Ablation first-person](images/ablation_first_mvd_vs_shared_only.png) | ![Ablation third-person front](images/ablation_front_mvd_vs_shared_only.png) | ![Ablation third-person side](images/ablation_side_mvd_vs_shared_only.png) |
 
 ## Notes on Comparability
 
